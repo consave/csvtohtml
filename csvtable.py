@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """This module will convert a .csv file into an html table. It can be imported or run like a command in bash"""
 
 import sys
@@ -66,9 +67,9 @@ class WorkingTable:
             self.rows.extend(copy.deepcopy(rowarray))
 
         if type(headerlist) == list[str]:
-            self.headers = copy(headerlist)
+            self.headers = copy.copy(headerlist)
 
-        if self.rows.len > 0:
+        if len(self.rows) > 0:
             self.__parse__()
         else:
             self.headers = None
@@ -153,7 +154,8 @@ class WorkingTable:
 
 def quick_convert(filename: str) -> list[str]:  # TODO: implement this
     """quickly convert the passed file into html table form"""
-    pass
+    print("Not implemented. ")
+    return [filename]
 
 
 def main():
@@ -213,6 +215,8 @@ def main():
         rowdata = sys.stdin
 
     my_table = WorkingTable(readfile, False, rowdata, None)
+    if addhtml:
+        my_table.add_html()
 
     if writefile is not None:  # TODO: exception handling
         my_table.save(writefile, True)
