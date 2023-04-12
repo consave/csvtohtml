@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """This module will convert a .csv file into an html table. It can be imported or run like a command in bash"""
-
+import _io
 import sys
 import csv
-import os
 import copy
+import argparse
 
 
 class WorkingTable:
@@ -32,41 +32,33 @@ class WorkingTable:
         add_html():
             update the table attribute to be wrapped in <!DOCTYPE html>, <html> and <body> tags.
     """
-    def __init__(self, filename=None, getheaders=False, rowarray=None, headerlist=None):
+    def __init__(self, csvdata: _io.TextIOWrapper, getheaders=False, headerlist=None):
         """
         create a WorkingTable with csv data. A WorkingTable contains an html style table.
-        :param filename: If defined, reads the specified csv file as input
-        :param getheaders: If true, the first row of the csv file will be used as a header.
-        :param rowarray: an array of strings representing a csv. Extends the read file data, if any.
-        :param headerlist: sets the headers attribute. Overwrites the read file data, if any.
+        :param csvdata: can be a file stream or stdin input. Expects .readlines() to work
+        :param getheaders: If true, the first row of the input will be read as a header
+        :param headerlist: sets the headers attribute. Overwrites the stream header, if any.
 
-        You can specify a file to read, pass the data directly as an array, or both. If no row
-        data is passed, all attributes will be set to None.
-
-        This method does not handle file exceptions and should be placed in a Try/Except block.
+        You must pass an open file or other stdin like object. This class does not handle any
+        exceptions.
         """
 
-        self.headers: list[str]     # csv headers
-        self.rows: list[list[str]]  # csv rows
-        self.table: list[str]       # html table for output
+        self.headers: list[str]      # csv headers
+        self.rows = list[list[str]]  # csv rows
+        self.table: list[str]        # html table for output
 
-        if type(filename) == str:
-            with open(filename, newline='') as file:
-                csvreader = csv.reader(file)
-                if getheaders is True:
-                    self.headers = csvreader.__next__()
-                else:
-                    self.headers = None
-                for row in csvreader:
-                    self.rows.append(row)
-            file.close()
+        if csvdata.readable():
+            csvreader = csv.reader(csvdata, skipinitialspace=True)
+            self.rows = []
+            if getheaders is True:
+                self.headers = next(csvreader)
+            else:
+                self.headers = None
+            self.rows.extend(csvreader)
         else:
-            self.rows = [[]]  # gives this a .len and .extend() property
+            self.rows = None
 
-        if type(rowarray) == list[list[str]]:
-            self.rows.extend(copy.deepcopy(rowarray))
-
-        if type(headerlist) == list[str]:
+        if headerlist is not None:
             self.headers = copy.copy(headerlist)
 
         if len(self.rows) > 0:
@@ -76,42 +68,23 @@ class WorkingTable:
             self.rows = None
             self.table = None
 
-    def save(self, filename, overwrite=False):
-        """
-        save the current table to a file. This method doesn't handle file exceptions
-        and should be placed in a Try/Except block.
-        :param filename: The name of the file to be written
-        :param overwrite: If false, raise a FileExistsError exception rather than overwrite.
-        :return: none
-
-        if table is None (because no data was loaded) it will try to write an empty file
-        """
-        if overwrite is False and os.path.exists(filename):
-            raise FileExistsError
-
-        with open(filename, 'w') as file:
-            if self.table is None:
-                file.close()
-                return
-            file.writelines(self.table)
-
     def __parse__(self):
         self.table = None  # initialize in case self.rows is empty
 
         # check that the data isn't empty
         if self.rows is None:
             return
-        if self.rows.len < 1:
+        if len(self.rows) < 1:
             return
-        columns = self.rows[0].len  # use number of columns to make the headers match up
+        columns = len(self.rows[0])  # use number of columns to make the headers match up
         if columns < 1:
             return
 
         # align the headers with columns
-        if type(self.headers) == list[str]:
+        if self.headers is not None:
             aligned_headers = []
             for i in range(columns):  # if too many headers, ignore the extras
-                if i < self.headers.len:
+                if i < len(self.headers):
                     aligned_headers.append(self.headers[i])
                 else:
                     aligned_headers.append(" ")  # if too few headers, put an empty header for each column
@@ -120,21 +93,21 @@ class WorkingTable:
             self.headers = None
 
         # begin writing the table
-        self.table = ["<table>"]
+        self.table = ["<table>\n"]
 
         if self.headers is not None:
-            self.table.append("\t<tr>")
+            self.table.append("\t<tr>\n")
             for header in self.headers:
-                self.table.append("\t\t<th>" + header + "</th>")
-            self.table.append("\t</tr>")
+                self.table.append("\t\t<th>" + header + "</th>\n")
+            self.table.append("\t</tr>\n")
 
         for row in self.rows:
-            self.table.append("\t<tr>")
+            self.table.append("\t<tr>\n")
             for cell in row:
-                self.table.append("\t\t<td>" + cell + "</td>")
-            self.table.append("\t</tr>")
+                self.table.append("\t\t<td>" + cell + "</td>\n")
+            self.table.append("\t</tr>\n")
 
-        self.table.append("</table>")
+        self.table.append("</table>\n")
 
     def add_html(self):
         """
@@ -145,83 +118,35 @@ class WorkingTable:
         if self.table is None:
             return
 
-        self.table.insert("<body>", 0)
-        self.table.insert("<html>", 0)
-        self.table.insert("<!DOCTYPE html>", 0)
-        self.table.append("</body>")
-        self.table.append("</html>")
-
-
-def quick_convert(filename: str) -> list[str]:  # TODO: implement this
-    """quickly convert the passed file into html table form"""
-    print("Not implemented. ")
-    return [filename]
+        self.table.insert(0, "<body>\n")
+        self.table.insert(0, "<html>\n")
+        self.table.insert(0, "<!DOCTYPE html>\n")
+        self.table.append("</body>\n")
+        self.table.append("</html>\n")
 
 
 def main():
     """
-    NAME
-        csvtable.py - converts a .csv file or stream into an .html format
+    The command-line utility for csvtable. Reads arguments from sys.argv
+    :return: will exit with sys.exit()
+    """
+    parser = argparse.ArgumentParser(description="convert a .csv file into an .html table")
+    parser.add_argument('infile', nargs='?', type=argparse.FileType('r'),
+                        default=sys.stdin, help="Input file. Uses stdin otherwise")
+    parser.add_argument('outfile', nargs='?', type=argparse.FileType('w'),
+                        default=sys.stdout, help="Output file. Uses stdout otherwise")
+    parser.add_argument("-b", "--browser", help="wrap the output in browser-friendly tags",
+                        action="store_true")
+    parser.add_argument("-r", "--read", help="Read the first row as file headers",
+                        action="store_true")
+    args = parser.parse_args()
 
-    SYNOPSIS
-        csvtable.py [-h] [-w=<filename>] [file ...]
-
-    DESCRIPTION
-        This will convert a .csv file into an .html <table> format. By default, it will input
-        and output from and to the standard streams.
-
-        The following options are available:
-
-        -h
-            This will wrap the output in <html> and <body> tags to make the output viewable in a browser.
-
-        -w=<filename>
-            Write the output to the specified filename instead of printing it.
-
-    EXAMPLES
-        The command:
-            csvtable.py -h -w=file1.html file1.csv
-
-        will convert the contents of file1.csv and write them to file1.html with the <html> and <body> tags.
-
-        The command:
-            tail file1.csv | csvtable.py >> file1.html
-
-        will take the output of "tail file1.csv" and append it to file1.html as just a <table>
-            """
-    addhtml = False
-    writefile = None
-    readfile = None
-    for argument in sys.argv:
-        if argument == "-h":
-            addhtml = True
-        elif argument[0:2] == "-w=":
-            writefile = argument[3:]
-        else:
-            if readfile is not None:
-                sys.stderr.write("csvtable.py ERROR: unexpected argument: " + argument)
-                return
-            readfile = argument
-
-    if readfile is not None:
-        if os.path.isfile(readfile) is False:
-            sys.stderr.write("csvtable.py ERROR: \'" + readfile + "\' could not be found")
-            return
-        rowdata = None
-    elif sys.stdin.isatty() is False:
-        sys.stderr.write("csvtable.py ERROR: no input given")
-        return
-    else:
-        rowdata = sys.stdin
-
-    my_table = WorkingTable(readfile, False, rowdata, None)
-    if addhtml:
+    my_table = WorkingTable(args.infile, args.read, None)
+    if args.browser:
         my_table.add_html()
 
-    if writefile is not None:  # TODO: exception handling
-        my_table.save(writefile, True)
-    else:
-        sys.stdout.writelines(my_table.table)
+    if my_table.table is not None:
+        args.outfile.writelines(my_table.table)
 
 
 if __name__ == "__main__":
